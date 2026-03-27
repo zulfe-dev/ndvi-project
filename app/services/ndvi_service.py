@@ -66,13 +66,6 @@ STATE_DISPLAY_NAMES = {
     "odisha": "Odisha",
     "uttarakhand": "Uttarakhand",
 }
-EE_PROJECT_ENV_VARS = ("EE_PROJECT", "GOOGLE_CLOUD_PROJECT", "GCLOUD_PROJECT")
-EE_PROJECT_PLACEHOLDERS = {
-    "",
-    "YOUR_GCP_PROJECT_ID",
-    "YOUR_PROJECT_ID",
-    "GCP_PROJECT_ID",
-}
 
 
 def _slugify(value: str) -> str:
@@ -96,94 +89,21 @@ class EarthEngineUnavailableError(RuntimeError):
     pass
 
 
-def _validated_ee_project(candidate: str | None) -> str | None:
-    value = (candidate or "").strip()
-    if not value or value in EE_PROJECT_PLACEHOLDERS:
-        return None
-    return value
+def initialize_earth_engine():
+    creds_json = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS_JSON")
 
+    if not creds_json:
+        raise Exception("Missing GOOGLE_APPLICATION_CREDENTIALS_JSON")
 
-def configured_ee_project() -> str | None:
-    for env_var in EE_PROJECT_ENV_VARS:
-        project = _validated_ee_project(os.getenv(env_var))
-        if project:
-            return project
+    creds_dict = json.loads(creds_json)
 
-    oauth = getattr(ee, "oauth", None)
-    if oauth and hasattr(oauth, "get_credentials_arguments"):
-        try:
-            args = oauth.get_credentials_arguments()
-            project = _validated_ee_project(args.get("quota_project_id"))
-            if project:
-                return project
-        except Exception:
-            pass
+    credentials = ee.ServiceAccountCredentials(
+        creds_dict["client_email"],
+        key_data=creds_dict
+    )
 
-    if oauth and hasattr(oauth, "get_appdefault_project"):
-        try:
-            project = _validated_ee_project(oauth.get_appdefault_project())
-            if project:
-                return project
-        except Exception:
-            pass
-
-    return None
-
-
-def earth_engine_credentials_path() -> str | None:
-    oauth = getattr(ee, "oauth", None)
-    if not oauth or not hasattr(oauth, "get_credentials_path"):
-        return None
-
-    try:
-        return oauth.get_credentials_path()
-    except Exception:  # pragma: no cover - depends on ee runtime internals
-        return None
-
-
-def earth_engine_credentials_access_issue(credentials_path: str | None) -> str | None:
-    if not credentials_path:
-        return None
-
-    try:
-        os.stat(credentials_path)
-        return None
-    except PermissionError as exc:
-        return f" Credentials path is not readable: {credentials_path}. {exc}"
-    except FileNotFoundError:
-        return f" Credentials file was not found at {credentials_path}."
-    except OSError as exc:
-        return f" Credentials path access failed: {credentials_path}. {exc}"
-
-
-def initialize_earth_engine() -> bool:
-    credentials_path = earth_engine_credentials_path()
-    credentials_issue = earth_engine_credentials_access_issue(credentials_path)
-
-    try:
-        logger.info(
-            "Initializing Earth Engine without project (credentials_path=%s)",
-            credentials_path,
-        )
-        ee.Initialize()
-        logger.info("Earth Engine initialized successfully (no project)")
-        return True
-    except Exception as exc:  # pragma: no cover - depends on runtime auth
-        credentials_note = (
-            f" Credentials path: {credentials_path}."
-            if credentials_path
-            else ""
-        )
-        credentials_issue_note = credentials_issue or ""
-        logger.exception("Earth Engine initialization failed: %s", exc)
-        raise EarthEngineUnavailableError(
-            "Earth Engine initialization failed."
-            + credentials_note
-            + credentials_issue_note
-            + " Run `earthengine authenticate --force` and verify with "
-            + "`python -c \"import ee; ee.Initialize(); print('OK')\"`."
-            + f" Original error: {exc}"
-        ) from exc
+    ee.Initialize(credentials)
+    print("Earth Engine initialized via ENV")
 
 
 @dataclass(frozen=True)
@@ -521,7 +441,13 @@ class NdviTileService:
             if self._ee_ready:
                 return True
 
-            self._ee_ready = initialize_earth_engine()
+            try:
+                initialize_earth_engine()
+            except Exception as e:
+                raise EarthEngineUnavailableError(
+                    f"Earth Engine initialization failed: {e}"
+                ) from e
+            self._ee_ready = True
 
         return self._ee_ready
 

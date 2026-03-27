@@ -18,7 +18,6 @@ from app.services.ndvi_service import (
     BoundaryRepository,
     EarthEngineUnavailableError,
     NdviTileService,
-    initialize_earth_engine,
 )
 
 # ---------------- CONFIG ----------------
@@ -130,13 +129,19 @@ def ensure_ee_available() -> bool:
         return True
 
     try:
-        initialize_earth_engine()
+        EE_AVAILABLE = ndvi_tile_service.initialize()
     except EarthEngineUnavailableError:
         EE_AVAILABLE = False
         raise
 
-    EE_AVAILABLE = True
-    return True
+    return EE_AVAILABLE
+
+
+try:
+    EE_AVAILABLE = ndvi_tile_service.initialize()
+except EarthEngineUnavailableError as exc:
+    EE_AVAILABLE = False
+    logger.warning("Earth Engine startup unavailable: %s", exc)
 
 
 def normalize_location_text(value: str | None) -> str:
@@ -1101,5 +1106,4 @@ def get_rainfall_stats():
 
 
 if __name__ == "__main__":
-    initialize_earth_engine()
     app.run(debug=True, host="0.0.0.0", port=8000)
