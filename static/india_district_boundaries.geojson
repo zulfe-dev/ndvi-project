@@ -1,0 +1,425 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Mumbai City",
+        "district_code": "MH_MUM_CITY",
+        "state": "Maharashtra",
+        "state_code": "MH"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [72.7757, 18.8900],
+            [72.8777, 18.8900],
+            [72.8777, 19.2700],
+            [72.7757, 19.2700],
+            [72.7757, 18.8900]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Mumbai Suburban",
+        "district_code": "MH_MUM_SUB",
+        "state": "Maharashtra",
+        "state_code": "MH"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [72.7757, 19.0400],
+            [72.9777, 19.0400],
+            [72.9777, 19.2800],
+            [72.7757, 19.2800],
+            [72.7757, 19.0400]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Thane",
+        "district_code": "MH_THANE",
+        "state": "Maharashtra",
+        "state_code": "MH"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [72.9000, 19.1000],
+            [73.3000, 19.1000],
+            [73.3000, 19.4000],
+            [72.9000, 19.4000],
+            [72.9000, 19.1000]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Pune",
+        "district_code": "MH_PUNE",
+        "state": "Maharashtra",
+        "state_code": "MH"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [73.6100, 18.4000],
+            [73.9900, 18.4000],
+            [73.9900, 18.7000],
+            [73.6100, 18.7000],
+            [73.6100, 18.4000]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Nashik",
+        "district_code": "MH_NASHIK",
+        "state": "Maharashtra",
+        "state_code": "MH"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [73.6000, 19.8000],
+            [74.0000, 19.8000],
+            [74.0000, 20.2000],
+            [73.6000, 20.2000],
+            [73.6000, 19.8000]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Aurangabad",
+        "district_code": "MH_AURANGABAD",
+        "state": "Maharashtra",
+        "state_code": "MH"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [75.1000, 19.7000],
+            [75.5000, 19.7000],
+            [75.5000, 20.0000],
+            [75.1000, 20.0000],
+            [75.1000, 19.7000]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Kolhapur",
+        "district_code": "MH_KOLHAPUR",
+        "state": "Maharashtra",
+        "state_code": "MH"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [74.1000, 16.5000],
+            [74.4000, 16.5000],
+            [74.4000, 16.8000],
+            [74.1000, 16.8000],
+            [74.1000, 16.5000]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Solapur",
+        "district_code": "MH_SOLAPUR",
+        "state": "Maharashtra",
+        "state_code": "MH"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [75.7000, 17.5000],
+            [76.0000, 17.5000],
+            [76.0000, 17.8000],
+            [75.7000, 17.8000],
+            [75.7000, 17.5000]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Nagpur",
+        "district_code": "MH_NAGPUR",
+        "state": "Maharashtra",
+        "state_code": "MH"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [79.0000, 21.0000],
+            [79.3000, 21.0000],
+            [79.3000, 21.3000],
+            [79.0000, 21.3000],
+            [79.0000, 21.0000]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Raigad",
+        "district_code": "MH_RAIGAD",
+        "state": "Maharashtra",
+        "state_code": "MH"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [72.8000, 18.2000],
+            [73.4000, 18.2000],
+            [73.4000, 18.9000],
+            [72.8000, 18.9000],
+            [72.8000, 18.2000]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Ahmednagar",
+        "district_code": "MH_AHMEDNAGAR",
+        "state": "Maharashtra",
+        "state_code": "MH"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [74.4000, 18.8000],
+            [75.2000, 18.8000],
+            [75.2000, 19.6000],
+            [74.4000, 19.6000],
+            [74.4000, 18.8000]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Jalgaon",
+        "district_code": "MH_JALGAON",
+        "state": "Maharashtra",
+        "state_code": "MH"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [75.3000, 20.8000],
+            [76.1000, 20.8000],
+            [76.1000, 21.4000],
+            [75.3000, 21.4000],
+            [75.3000, 20.8000]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Dhule",
+        "district_code": "MH_DHULE",
+        "state": "Maharashtra",
+        "state_code": "MH"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [74.6000, 20.7000],
+            [75.3000, 20.7000],
+            [75.3000, 21.3000],
+            [74.6000, 21.3000],
+            [74.6000, 20.7000]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Satara",
+        "district_code": "MH_SATARA",
+        "state": "Maharashtra",
+        "state_code": "MH"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [73.8000, 17.4000],
+            [74.4000, 17.4000],
+            [74.4000, 18.2000],
+            [73.8000, 18.2000],
+            [73.8000, 17.4000]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Sangli",
+        "district_code": "MH_SANGLI",
+        "state": "Maharashtra",
+        "state_code": "MH"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [74.4000, 16.7000],
+            [75.1000, 16.7000],
+            [75.1000, 17.4000],
+            [74.4000, 17.4000],
+            [74.4000, 16.7000]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "North Goa",
+        "district_code": "GA_NORTH_GOA",
+        "state": "Goa",
+        "state_code": "GA"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [73.7000, 15.4000],
+            [74.3000, 15.4000],
+            [74.3000, 15.8000],
+            [73.7000, 15.8000],
+            [73.7000, 15.4000]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "South Goa",
+        "district_code": "GA_SOUTH_GOA",
+        "state": "Goa",
+        "state_code": "GA"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [73.7000, 15.0000],
+            [74.3000, 15.0000],
+            [74.3000, 15.4000],
+            [73.7000, 15.4000],
+            [73.7000, 15.0000]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "New Delhi",
+        "district_code": "DL_NEW_DELHI",
+        "state": "Delhi",
+        "state_code": "DL"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [76.8000, 28.5000],
+            [77.1000, 28.5000],
+            [77.1000, 28.7000],
+            [76.8000, 28.7000],
+            [76.8000, 28.5000]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Central Delhi",
+        "district_code": "DL_CENTRAL_DELHI",
+        "state": "Delhi",
+        "state_code": "DL"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [77.1000, 28.6000],
+            [77.3000, 28.6000],
+            [77.3000, 28.8000],
+            [77.1000, 28.8000],
+            [77.1000, 28.6000]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "South Delhi",
+        "district_code": "DL_SOUTH_DELHI",
+        "state": "Delhi",
+        "state_code": "DL"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [77.1000, 28.4000],
+            [77.3000, 28.4000],
+            [77.3000, 28.6000],
+            [77.1000, 28.6000],
+            [77.1000, 28.4000]
+          ]
+        ]
+      }
+    }
+  ]
+}

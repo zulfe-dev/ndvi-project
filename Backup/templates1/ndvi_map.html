@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>🗺️ India NDVI Administrative Map</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<style>
+body {
+    margin: 0;
+    font-family: Segoe UI, sans-serif;
+    background: linear-gradient(135deg, #28a745, #20c997);
+}
+.container {
+    max-width: 1400px;
+    margin: 20px auto;
+    background: #fff;
+    border-radius: 18px;
+    box-shadow: 0 20px 40px rgba(0,0,0,.15);
+    overflow: hidden;
+}
+.header {
+    background: linear-gradient(135deg, #28a745, #20c997);
+    color: white;
+    padding: 30px;
+    text-align: center;
+}
+.controls-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit,minmax(200px,1fr));
+    gap: 20px;
+    padding: 25px;
+    background: #f8f9fa;
+}
+.form-group label {
+    font-weight: 600;
+    margin-bottom: 6px;
+    display: block;
+}
+.form-group select,
+.form-group input {
+    width: 100%;
+    padding: 12px;
+    border-radius: 8px;
+    border: 2px solid #ddd;
+}
+.btn {
+    background: linear-gradient(135deg,#28a745,#20c997);
+    border: none;
+    color: white;
+    padding: 14px;
+    border-radius: 10px;
+    font-size: 1rem;
+    cursor: pointer;
+}
+#map {
+    height: 620px;
+    margin: 20px;
+    border-radius: 12px;
+    border: 2px solid #ddd;
+}
+.legend {
+    margin: 20px;
+    background: white;
+    padding: 15px;
+    border-radius: 10px;
+    box-shadow: 0 3px 12px rgba(0,0,0,.1);
+}
+.legend-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 6px;
+}
+.legend-color {
+    width: 20px;
+    height: 20px;
+    margin-right: 8px;
+    border-radius: 4px;
+}
+.severe { background:#dc3545; }
+.moderate { background:#fd7e14; }
+.mild { background:#ffc107; }
+.normal { background:#28a745; }
+.no-data { background:#ccc; }
+
+.ndvi-status {
+    padding: 4px 8px;
+    border-radius: 5px;
+    color: white;
+    font-weight: 600;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1>🗺️ India NDVI Administrative Boundaries</h1>
+        <p>District / Tehsil NDVI Severity Map</p>
+    </div>
+
+    <form id="controls">
+        <div class="controls-container">
+            <div class="form-group">
+                <label>State</label>
+                <select id="stateFilter">
+                    <option value="all">All States</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Level</label>
+                <select id="level">
+                    <option value="district">District</option>
+                    <option value="tehsil">Tehsil</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>NDVI Date</label>
+                <input type="date" id="ndviDate" min="2023-01-01" max="2024-12-31" required>
+            </div>
+
+            <div class="form-group">
+                <label>&nbsp;</label>
+                <button class="btn">Update Map</button>
+            </div>
+        </div>
+    </form>
+
+    <div id="map"></div>
+
+    <div class="legend">
+        <strong>NDVI Legend</strong>
+        <div class="legend-item"><div class="legend-color severe"></div> Severe (&lt; 0.2)</div>
+        <div class="legend-item"><div class="legend-color moderate"></div> Moderate (0.2 – 0.4)</div>
+        <div class="legend-item"><div class="legend-color mild"></div> Mild (0.4 – 0.6)</div>
+        <div class="legend-item"><div class="legend-color normal"></div> Normal (&gt; 0.6)</div>
+        <div class="legend-item"><div class="legend-color no-data"></div> No Data</div>
+    </div>
+</div>
+
+<script>
+let map = L.map('map').setView([20.6, 78.9], 5);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+let layerGroup = L.layerGroup().addTo(map);
+
+let districtData, tehsilData;
+let ndviLookup = {};
+
+document.getElementById('ndviDate').value = '2024-01-15';
+
+function getNdviCategory(v){
+    if(v === null || v === undefined) return 'no-data';
+    if(v < 0.2) return 'severe';
+    if(v < 0.4) return 'moderate';
+    if(v < 0.6) return 'mild';
+    return 'normal';
+}
+function getNdviColor(cat){
+    return {
+        severe:'#dc3545',
+        moderate:'#fd7e14',
+        mild:'#ffc107',
+        normal:'#28a745',
+        'no-data':'#ccc'
+    }[cat];
+}
+
+async function loadGeoJSON(){
+    districtData = await fetch('/static/india_district.geojson').then(r=>r.json());
+    tehsilData = await fetch('/static/india_taluk.geojson').then(r=>r.json());
+
+    const states = new Set();
+    districtData.features.forEach(f=>states.add(f.properties.NAME_1));
+    states.forEach(s=>{
+        stateFilter.add(new Option(s,s));
+    });
+}
+
+async function fetchNDVI(level,state,date){
+    const res = await fetch('/api/ndvi/regional-analysis',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+            level: level === 'tehsil' ? 'district' : level,
+            state: state === 'all' ? null : state,
+            date
+        })
+    }).then(r=>r.json());
+
+    ndviLookup = {};
+    if(res.status === 'success'){
+        res.data.regions.forEach(r=>{
+            ndviLookup[r.name.toLowerCase()] = r.ndvi_value;
+        });
+    }
+}
+
+function drawMap(){
+    layerGroup.clearLayers();
+
+    const state = stateFilter.value;
+    const level = document.getElementById('level').value;
+    const date = ndviDate.value;
+    const data = level === 'district' ? districtData : tehsilData;
+
+    data.features.forEach(f=>{
+        if(state !== 'all' && f.properties.NAME_1 !== state) return;
+
+        const name = level === 'district'
+            ? f.properties.NAME_2
+            : f.properties.NAME_3;
+
+        const ndvi = ndviLookup[name?.toLowerCase()];
+        const cat = getNdviCategory(ndvi);
+        const color = getNdviColor(cat);
+
+        L.geoJSON(f,{
+            style:{
+                fillColor: color,
+                color:'#555',
+                weight:1.5,
+                fillOpacity:.75
+            }
+        })
+        .bindPopup(`
+            <strong>${name}</strong><br>
+            NDVI: ${ndvi !== undefined ? ndvi?.toFixed(3) : 'No data'}<br>
+            <span class="ndvi-status ${cat}">${cat.toUpperCase()}</span>
+        `)
+        .addTo(layerGroup);
+    });
+}
+
+document.getElementById('controls').addEventListener('submit', async e=>{
+    e.preventDefault();
+    await fetchNDVI(level.value, stateFilter.value, ndviDate.value);
+    drawMap();
+});
+
+loadGeoJSON().then(()=>fetchNDVI('district','all',ndviDate.value).then(drawMap));
+</script>
+
+</body>
+</html>
