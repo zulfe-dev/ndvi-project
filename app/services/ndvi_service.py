@@ -95,7 +95,10 @@ def initialize_earth_engine():
     if not creds_json:
         raise Exception("Missing GOOGLE_APPLICATION_CREDENTIALS_JSON")
 
-    creds_dict = json.loads(creds_json)
+    if isinstance(creds_json, str):
+        creds_dict = json.loads(creds_json)
+    else:
+        creds_dict = creds_json
 
     credentials = ee.ServiceAccountCredentials(
         creds_dict["client_email"],
