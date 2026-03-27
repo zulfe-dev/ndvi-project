@@ -97,12 +97,14 @@ def initialize_earth_engine():
 
     if isinstance(creds_json, str):
         creds_dict = json.loads(creds_json)
+        key_data = creds_json
     else:
         creds_dict = creds_json
+        key_data = json.dumps(creds_dict)
 
     credentials = ee.ServiceAccountCredentials(
         creds_dict["client_email"],
-        key_data=creds_dict
+        key_data=key_data,
     )
 
     ee.Initialize(credentials)
