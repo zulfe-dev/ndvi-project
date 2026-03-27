@@ -1,10 +1,6 @@
-Flask==3.1.2
-FastAPI==0.109.0
-uvicorn==0.27.0
+flask==3.0.0
+gunicorn==21.2.0
+earthengine-api
 geopy==2.4.1
-requests==2.32.5
-earthengine-api>=0.1.390
-gunicorn
-setuptools>=65
+setuptools==68.2.2
 wheel
-pip

@@ -11,9 +11,6 @@ from pathlib import Path
 from threading import Lock
 
 import ee
-from shapely.geometry import mapping, shape
-from shapely.geometry.base import BaseGeometry
-from shapely.ops import unary_union
 
 logger = logging.getLogger(__name__)
 
@@ -190,11 +187,21 @@ def initialize_earth_engine() -> bool:
 
 
 @dataclass(frozen=True)
+class GeoJsonGeometry:
+    geojson: dict[str, object]
+    bounds: tuple[float, float, float, float]
+
+    @property
+    def __geo_interface__(self) -> dict[str, object]:
+        return self.geojson
+
+
+@dataclass(frozen=True)
 class BoundaryFeature:
     name: str
     state_key: str
     parent_name: str | None
-    geometry: BaseGeometry
+    geometry: GeoJsonGeometry
     bounds: tuple[float, float, float, float]
 
 
@@ -209,11 +216,43 @@ def _display_name_for_state_key(state_key: str) -> str:
     return state_key.replace("-", " ").title()
 
 
-def _clean_geometry(geometry: BaseGeometry) -> BaseGeometry:
-    if geometry.is_valid:
-        return geometry
-    cleaned = geometry.buffer(0)
-    return cleaned if not cleaned.is_empty else geometry
+def _clone_json_value(value: object) -> object:
+    return json.loads(json.dumps(value))
+
+
+def _iter_coordinate_pairs(value: object):
+    if isinstance(value, (list, tuple)):
+        if len(value) >= 2 and all(isinstance(item, (int, float)) for item in value[:2]):
+            yield float(value[0]), float(value[1])
+            return
+
+        for item in value:
+            yield from _iter_coordinate_pairs(item)
+
+
+def _geometry_bounds(geometry: dict[str, object]) -> tuple[float, float, float, float]:
+    points = list(_iter_coordinate_pairs(geometry.get("coordinates", [])))
+    if not points:
+        raise BoundaryLookupError("Boundary geometry is missing coordinates")
+
+    longitudes = [point[0] for point in points]
+    latitudes = [point[1] for point in points]
+    return (
+        min(longitudes),
+        min(latitudes),
+        max(longitudes),
+        max(latitudes),
+    )
+
+
+def _geojson_geometry(raw_geometry: dict[str, object]) -> GeoJsonGeometry:
+    geometry = _clone_json_value(raw_geometry)
+    if not isinstance(geometry, dict):
+        raise BoundaryLookupError("Boundary geometry is invalid")
+    return GeoJsonGeometry(
+        geojson=geometry,
+        bounds=_geometry_bounds(geometry),
+    )
 
 
 def _round_nested(value: object, precision: int = 5) -> object:
@@ -251,7 +290,7 @@ class BoundaryRepository:
     def __init__(self, static_dir: Path):
         self.static_dir = Path(static_dir)
         self._lock = Lock()
-        self._state_geometries: dict[str, BaseGeometry] = {}
+        self._state_geometries: dict[str, GeoJsonGeometry] = {}
         self._state_names: dict[str, str] = {}
         self._state_slugs: dict[str, str] = {}
         self._level_features: dict[str, dict[str, list[BoundaryFeature]]] = {}
@@ -278,7 +317,11 @@ class BoundaryRepository:
                     continue
 
                 state_key = _canonical_state_key(state_name)
-                geometry = _clean_geometry(shape(feature["geometry"]))
+                geometry_data = feature.get("geometry")
+                if not geometry_data:
+                    continue
+
+                geometry = _geojson_geometry(geometry_data)
                 self._state_names[state_key] = _display_name_for_state_key(state_key)
                 self._state_slugs[state_key] = state_key
                 self._state_geometries[state_key] = geometry
@@ -300,7 +343,6 @@ class BoundaryRepository:
 
             data = self._read_geojson(LEVEL_FILE_MAP[level])
             features_by_state: dict[str, list[BoundaryFeature]] = {}
-            geometries_by_state: dict[str, list[BaseGeometry]] = {}
 
             name_field = LEVEL_NAME_FIELDS[level]
             parent_field = LEVEL_PARENT_FIELDS[level]
@@ -314,7 +356,11 @@ class BoundaryRepository:
 
                 state_key = _canonical_state_key(raw_state_name)
                 parent_name = properties.get(parent_field) if parent_field else None
-                geometry = _clean_geometry(shape(feature["geometry"]))
+                geometry_data = feature.get("geometry")
+                if not geometry_data:
+                    continue
+
+                geometry = _geojson_geometry(geometry_data)
                 boundary_feature = BoundaryFeature(
                     name=str(name),
                     state_key=state_key,
@@ -324,13 +370,8 @@ class BoundaryRepository:
                 )
 
                 features_by_state.setdefault(state_key, []).append(boundary_feature)
-                geometries_by_state.setdefault(state_key, []).append(geometry)
                 self._state_names.setdefault(state_key, _display_name_for_state_key(state_key))
                 self._state_slugs.setdefault(state_key, state_key)
-
-            for state_key, geometries in geometries_by_state.items():
-                if state_key not in self._state_geometries:
-                    self._state_geometries[state_key] = _clean_geometry(unary_union(geometries))
 
             self._level_features[level] = features_by_state
             logger.info("Loaded %s boundary index for %d states", level, len(features_by_state))
@@ -359,7 +400,7 @@ class BoundaryRepository:
             )
         return states
 
-    def state_geometry(self, state_slug: str) -> BaseGeometry:
+    def state_geometry(self, state_slug: str) -> GeoJsonGeometry:
         state_key = self._resolve_state_key(state_slug)
         return self._state_geometries[state_key]
 
@@ -438,14 +479,9 @@ class BoundaryRepository:
                 if _bounds_intersect(feature.bounds, query_bounds)
             ]
 
-        tolerance = self._simplify_tolerance(level, zoom)
         collection_features = []
 
         for feature in filtered_features:
-            geometry = feature.geometry.simplify(tolerance, preserve_topology=True)
-            if geometry.is_empty:
-                continue
-
             collection_features.append(
                 {
                     "type": "Feature",
@@ -454,7 +490,7 @@ class BoundaryRepository:
                         "state": self._state_names[state_key],
                         "parent": feature.parent_name,
                     },
-                    "geometry": _round_nested(mapping(geometry), precision=5),
+                    "geometry": _round_nested(feature.geometry.__geo_interface__, precision=5),
                 }
             )
 
@@ -509,7 +545,7 @@ class NdviTileService:
         state_geometry = self.boundary_repository.state_geometry(state_slug)
         start_date, end_date = self._date_window(date_value)
 
-        ee_geometry = ee.Geometry(_round_nested(mapping(state_geometry), precision=6))
+        ee_geometry = ee.Geometry(_round_nested(state_geometry.__geo_interface__, precision=6))
         collection = (
             ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
             .filterBounds(ee_geometry)
