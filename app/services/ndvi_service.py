@@ -90,21 +90,21 @@ class EarthEngineUnavailableError(RuntimeError):
 
 
 def initialize_earth_engine():
-    creds_json = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS_JSON")
+    creds = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS_JSON")
 
-    if not creds_json:
+    if not creds:
         raise Exception("Missing GOOGLE_APPLICATION_CREDENTIALS_JSON")
 
-    if isinstance(creds_json, str):
-        creds_dict = json.loads(creds_json)
-        key_data = creds_json
+    if isinstance(creds, dict):
+        creds_str = json.dumps(creds)
     else:
-        creds_dict = creds_json
-        key_data = json.dumps(creds_dict)
+        creds_str = creds
+
+    creds_dict = json.loads(creds_str)
 
     credentials = ee.ServiceAccountCredentials(
         creds_dict["client_email"],
-        key_data=key_data,
+        key_data=creds_str,
     )
 
     ee.Initialize(credentials)
