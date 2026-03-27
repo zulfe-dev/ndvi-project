@@ -5,3 +5,5 @@ geopy==2.4.1
 requests==2.32.5
 earthengine-api>=0.1.390
 Shapely==2.0.0
+setuptools
+wheel
