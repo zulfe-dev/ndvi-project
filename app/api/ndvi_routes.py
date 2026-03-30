@@ -4,16 +4,17 @@ import json
 import logging
 import re
 import time
+from json import JSONDecodeError
 from datetime import datetime, timedelta
 from functools import lru_cache
 from threading import Lock
 
 import ee
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from geopy.exc import GeocoderServiceError, GeocoderTimedOut, GeocoderUnavailable
 from geopy.geocoders import Nominatim
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from app.core.config import (
     GEOCODER_DELAY_SECONDS,
@@ -663,10 +664,15 @@ async def get_boundaries(
 
 
 def _ndvi_tile_json_response(state: str, date: str) -> JSONResponse:
+    payload = _ndvi_tile_payload(state, date)
+    return JSONResponse(payload, headers={"Cache-Control": "public, max-age=43200"})
+
+
+def _ndvi_tile_payload(state: str, date: str) -> dict:
     _require_ee_ready()
 
     try:
-        payload = ndvi_tile_service.tile_payload(state, date)
+        return ndvi_tile_service.tile_payload(state, date)
     except EarthEngineUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except BoundaryLookupError as exc:
@@ -674,17 +680,143 @@ def _ndvi_tile_json_response(state: str, date: str) -> JSONResponse:
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    return JSONResponse(payload, headers={"Cache-Control": "public, max-age=43200"})
-
 
 @router.get("/ndvi/{state}/{date}")
 async def get_ndvi_tile(state: str, date: str) -> JSONResponse:
     return _ndvi_tile_json_response(state, date)
 
 
-@router.post("/api/ndvi/tile-url")
-async def get_ndvi_tile_url(request: NdviTileRequest) -> JSONResponse:
-    return _ndvi_tile_json_response(request.state, request.date)
+@router.api_route("/api/ndvi/tile-url", methods=["GET", "POST"])
+async def get_ndvi_tile_url(request: Request) -> JSONResponse:
+    print("Tile API called")
+
+    if request.method == "GET":
+        return JSONResponse(
+            content={
+                "success": True,
+                "sample": True,
+                "tile_url": "https://example.com/ndvi/{z}/{x}/{y}.png",
+                "state": "Sample State",
+                "state_slug": "sample-state",
+                "date": "2024-01-01",
+                "message": "GET test response. Use POST with state and date for live NDVI tiles.",
+            }
+        )
+
+    try:
+        raw_payload = await request.json()
+    except JSONDecodeError:
+        detail = "Invalid JSON body"
+        return JSONResponse(
+            status_code=422,
+            content={
+                "success": False,
+                "error": detail,
+                "message": detail,
+            },
+        )
+    except Exception:
+        detail = "state and date are required in the POST body"
+        return JSONResponse(
+            status_code=422,
+            content={
+                "success": False,
+                "error": detail,
+                "message": detail,
+            },
+        )
+
+    try:
+        payload = NdviTileRequest.model_validate(raw_payload)
+    except ValidationError as exc:
+        detail = exc.errors()[0].get("msg", "Invalid request body")
+        return JSONResponse(
+            status_code=422,
+            content={
+                "success": False,
+                "error": detail,
+                "message": detail,
+            },
+        )
+
+    try:
+        try:
+            if not getattr(ee.data, "_initialized", False):
+                _require_ee_ready()
+        except HTTPException:
+            detail = "EE not initialized"
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "success": False,
+                    "error": detail,
+                    "message": detail,
+                },
+            )
+
+        if not getattr(ee.data, "_initialized", False):
+            detail = "EE not initialized"
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "success": False,
+                    "error": detail,
+                    "message": detail,
+                },
+            )
+
+        tile_payload = ndvi_tile_service.tile_payload(payload.state, payload.date)
+        tile_url = tile_payload.get("tile_url")
+        if not tile_url:
+            raise ValueError("Tile URL not generated")
+
+        return JSONResponse(
+            content={
+                "success": True,
+                "tile_url": tile_url,
+            },
+            headers={"Cache-Control": "public, max-age=43200"},
+        )
+    except BoundaryLookupError as exc:
+        detail = str(exc)
+        return JSONResponse(
+            status_code=404,
+            content={
+                "success": False,
+                "error": detail,
+                "message": detail,
+            },
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        return JSONResponse(
+            status_code=422,
+            content={
+                "success": False,
+                "error": detail,
+                "message": detail,
+            },
+        )
+    except EarthEngineUnavailableError:
+        detail = "EE not initialized"
+        return JSONResponse(
+            status_code=503,
+            content={
+                "success": False,
+                "error": detail,
+                "message": detail,
+            },
+        )
+    except Exception as exc:  # pragma: no cover - defensive API guard
+        logger.exception("Unexpected NDVI tile-url error")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "error": str(exc),
+                "message": str(exc),
+            },
+        )
 
 
 @router.get("/ndvi-value")
