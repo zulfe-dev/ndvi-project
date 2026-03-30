@@ -1,0 +1,9 @@
+INFO:     Started server process [14784]
+INFO:     Waiting for application startup.
+INFO:app.services.ndvi_service:Loaded district boundary index for 34 states
+WARNING:app.api.ndvi_routes:Earth Engine startup unavailable: Earth Engine initialization failed: Missing GOOGLE_APPLICATION_CREDENTIALS_JSON
+WARNING:app.api.ndvi_routes:Earth Engine is not ready at startup; NDVI and weather endpoints will return 503 until it initializes.
+WARNING:app.api.ndvi_routes:Earth Engine startup unavailable: Earth Engine initialization failed: Missing GOOGLE_APPLICATION_CREDENTIALS_JSON
+WARNING:app.api.ndvi_routes:Earth Engine is not ready at startup; NDVI and weather endpoints will return 503 until it initializes.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)

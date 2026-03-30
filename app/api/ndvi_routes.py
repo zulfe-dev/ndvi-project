@@ -10,7 +10,7 @@ from threading import Lock
 
 import ee
 from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from geopy.exc import GeocoderServiceError, GeocoderTimedOut, GeocoderUnavailable
 from geopy.geocoders import Nominatim
 from pydantic import BaseModel, Field
@@ -59,6 +59,27 @@ class RainFallRequest(BaseModel):
 class NdviTileRequest(BaseModel):
     state: str = Field(..., min_length=2)
     date: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$")
+
+
+class LegacyWeatherRequest(BaseModel):
+    date: str
+    state: str | None = None
+    district: str | None = None
+    locality: str | None = None
+
+
+class LegacyWeatherRangeRequest(BaseModel):
+    state: str | None = None
+    district: str
+    from_date: str
+    to_date: str
+
+
+class LegacyRainFallRequest(BaseModel):
+    date: str
+    state: str | None = None
+    district: str | None = None
+    locality: str | None = None
 
 
 @router.on_event("startup")
@@ -565,9 +586,54 @@ def _resolve_ndvi_date(date_value: str | None) -> str:
     return resolved_date
 
 
+def _weather_payload(location: dict, date_value: str) -> dict:
+    all_data = get_all_gee_data(location["latitude"], location["longitude"], date_value)
+    return {
+        "rainfall": all_data.get("rainfall"),
+        "temperature_max": all_data.get("temperature_max"),
+        "temperature_min": all_data.get("temperature_min"),
+        "temperature_mean": all_data.get("temperature_mean"),
+        "ndvi": all_data.get("ndvi"),
+    }
+
+
+def _legacy_weather_response(
+    locality: str,
+    state: str | None,
+    date_value: str,
+    location: dict,
+) -> dict:
+    response = {
+        "state": _normalize_location_text(state) if state else None,
+        "district": _normalize_location_text(locality),
+        "date": date_value,
+        "location": location,
+        "weather_data": _weather_payload(location, date_value),
+    }
+    if location.get("is_fallback"):
+        response["message"] = location.get("fallback_reason")
+    return response
+
+
 @router.get("/", response_class=FileResponse)
-async def ndvi_map() -> FileResponse:
+async def index_page() -> FileResponse:
+    return FileResponse(TEMPLATE_DIR / "index.html", media_type="text/html")
+
+
+@router.get("/ndvi", response_class=FileResponse)
+async def ndvi_map_page() -> FileResponse:
     return FileResponse(TEMPLATE_DIR / "ndvi_map.html", media_type="text/html")
+
+
+@router.get("/ndvi-map", include_in_schema=False)
+async def legacy_ndvi_map_page() -> RedirectResponse:
+    return RedirectResponse(url="/ndvi", status_code=307)
+
+
+@router.get("/api/states")
+async def list_dashboard_states() -> JSONResponse:
+    names = sorted(state["name"] for state in boundary_repository.list_states())
+    return JSONResponse({"states": names}, headers={"Cache-Control": "public, max-age=86400"})
 
 
 @router.get("/api/ndvi/states")
@@ -664,6 +730,95 @@ async def get_weather_data(data: WeatherRequest) -> dict:
     return response
 
 
+@router.post("/api/weather/get-data")
+async def get_legacy_weather_data(data: LegacyWeatherRequest) -> JSONResponse:
+    locality = data.locality or data.district
+    if not locality:
+        return JSONResponse({"status": "error", "message": "district is required"}, status_code=422)
+
+    try:
+        date_value = _resolve_ndvi_date(data.date)
+        location = _resolve_weather_location(locality, data.state)
+        if not location:
+            return JSONResponse({"status": "error", "message": "Location not found in India"}, status_code=404)
+
+        return JSONResponse({"status": "success", "data": _legacy_weather_response(locality, data.state, date_value, location)})
+    except EarthEngineUnavailableError as exc:
+        logger.error("Earth Engine unavailable for weather request: %s", exc)
+        return JSONResponse({"status": "error", "message": str(exc)}, status_code=503)
+    except HTTPException as exc:
+        return JSONResponse({"status": "error", "message": str(exc.detail)}, status_code=exc.status_code)
+    except Exception as exc:  # pragma: no cover - defensive compatibility path
+        logger.error("Error processing legacy weather request: %s", exc, exc_info=True)
+        return JSONResponse({"status": "error", "message": str(exc)}, status_code=500)
+
+
+@router.post("/api/weather/get-data-range")
+async def get_weather_data_range(data: LegacyWeatherRangeRequest) -> JSONResponse:
+    try:
+        from_date_obj = datetime.strptime(data.from_date, "%Y-%m-%d")
+        to_date_obj = datetime.strptime(data.to_date, "%Y-%m-%d")
+    except ValueError:
+        return JSONResponse(
+            {"status": "error", "message": "Dates must be provided as YYYY-MM-DD"},
+            status_code=400,
+        )
+
+    min_date = datetime(2023, 1, 1).date()
+    max_date = datetime.now().date()
+    if from_date_obj.date() < min_date or to_date_obj.date() > max_date:
+        return JSONResponse(
+            {
+                "status": "error",
+                "message": f"Dates must be between {min_date.isoformat()} and {max_date.isoformat()}",
+            },
+            status_code=400,
+        )
+    if from_date_obj > to_date_obj:
+        return JSONResponse(
+            {"status": "error", "message": "From date must be before or equal to To date"},
+            status_code=400,
+        )
+
+    try:
+        location = _resolve_weather_location(data.district, data.state)
+        if not location:
+            return JSONResponse({"status": "error", "message": "Location not found in India"}, status_code=404)
+
+        current_date = from_date_obj
+        date_results = []
+        while current_date <= to_date_obj:
+            date_value = current_date.strftime("%Y-%m-%d")
+            date_results.append(
+                {
+                    "date": date_value,
+                    "weather_data": _weather_payload(location, date_value),
+                }
+            )
+            current_date += timedelta(days=1)
+
+        response_data = {
+            "state": _normalize_location_text(data.state) if data.state else None,
+            "district": _normalize_location_text(data.district),
+            "from_date": data.from_date,
+            "to_date": data.to_date,
+            "location": location,
+            "date_results": date_results,
+        }
+        if location.get("is_fallback"):
+            response_data["message"] = location.get("fallback_reason")
+
+        return JSONResponse({"status": "success", "data": response_data})
+    except EarthEngineUnavailableError as exc:
+        logger.error("Earth Engine unavailable for date range request: %s", exc)
+        return JSONResponse({"status": "error", "message": str(exc)}, status_code=503)
+    except HTTPException as exc:
+        return JSONResponse({"status": "error", "message": str(exc.detail)}, status_code=exc.status_code)
+    except Exception as exc:  # pragma: no cover - defensive compatibility path
+        logger.error("Error processing date range request: %s", exc, exc_info=True)
+        return JSONResponse({"status": "error", "message": str(exc)}, status_code=500)
+
+
 @router.post("/api/v1/ndvi/get-rain-fall-stats")
 async def get_rain_fall_stats(data: RainFallRequest) -> dict:
     location = _resolve_weather_location(data.locality, data.state)
@@ -684,3 +839,47 @@ async def get_rain_fall_stats(data: RainFallRequest) -> dict:
     if location.get("is_fallback"):
         response["data_received"]["message"] = location.get("fallback_reason")
     return response
+
+
+@router.post("/api/rainfall/get-stats")
+async def get_legacy_rainfall_stats(data: LegacyRainFallRequest) -> JSONResponse:
+    try:
+        locality = data.locality or data.district
+        if not locality:
+            return JSONResponse({"status": "error", "message": "district is required"}, status_code=422)
+
+        location = _resolve_weather_location(locality, data.state)
+        if not location:
+            return JSONResponse({"status": "error", "message": "Location not found in India"}, status_code=404)
+
+        response = {
+            "status": "success",
+            "data_received": {
+                "locality": _normalize_location_text(locality),
+                "date": data.date,
+                "location": location,
+                "rainfall": get_all_gee_data(location["latitude"], location["longitude"], data.date).get("rainfall"),
+            },
+        }
+        if location.get("is_fallback"):
+            response["data_received"]["message"] = location.get("fallback_reason")
+        return JSONResponse(response)
+    except EarthEngineUnavailableError as exc:
+        logger.error("Earth Engine unavailable for legacy rainfall request: %s", exc)
+        return JSONResponse({"status": "error", "message": str(exc)}, status_code=503)
+    except HTTPException as exc:
+        return JSONResponse({"status": "error", "message": str(exc.detail)}, status_code=exc.status_code)
+    except Exception as exc:  # pragma: no cover - defensive compatibility path
+        logger.error("Error processing legacy rainfall request: %s", exc, exc_info=True)
+        return JSONResponse({"status": "error", "message": str(exc)}, status_code=500)
+
+
+@router.get("/api/ndvi/available-dates")
+async def available_dates() -> JSONResponse:
+    return JSONResponse(
+        {
+            "status": "success",
+            "message": "All dates from 2000-01-01 onwards are available via Earth Engine",
+            "ranges": [],
+        }
+    )

@@ -93,26 +93,26 @@ def initialize_earth_engine() -> None:
     creds = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS_JSON")
 
     if not creds:
-        raise Exception("Missing GOOGLE_APPLICATION_CREDENTIALS_JSON")
+        raise ValueError("Missing GOOGLE_APPLICATION_CREDENTIALS_JSON")
 
     if isinstance(creds, dict):
-        creds_dict = creds
         creds_str = json.dumps(creds)
     elif isinstance(creds, str):
         creds_str = creds
-        try:
-            creds_dict = json.loads(creds_str)
-        except json.JSONDecodeError as exc:
-            raise Exception("Invalid GOOGLE_APPLICATION_CREDENTIALS_JSON") from exc
     else:
-        raise Exception("GOOGLE_APPLICATION_CREDENTIALS_JSON must be a JSON string or dict")
+        raise ValueError("GOOGLE_APPLICATION_CREDENTIALS_JSON must be a JSON string or dict")
+
+    try:
+        creds_dict = json.loads(creds_str)
+    except json.JSONDecodeError as exc:
+        raise ValueError("Invalid GOOGLE_APPLICATION_CREDENTIALS_JSON") from exc
 
     if not isinstance(creds_dict, dict):
-        raise Exception("GOOGLE_APPLICATION_CREDENTIALS_JSON must decode to an object")
+        raise ValueError("GOOGLE_APPLICATION_CREDENTIALS_JSON must decode to an object")
 
     client_email = creds_dict.get("client_email")
     if not client_email:
-        raise Exception("GOOGLE_APPLICATION_CREDENTIALS_JSON missing client_email")
+        raise ValueError("GOOGLE_APPLICATION_CREDENTIALS_JSON missing client_email")
 
     credentials = ee.ServiceAccountCredentials(
         client_email,
@@ -120,7 +120,7 @@ def initialize_earth_engine() -> None:
     )
 
     ee.Initialize(credentials)
-    print("Earth Engine initialized via ENV")
+    logger.info("Earth Engine initialized via ENV")
 
 
 @dataclass(frozen=True)
