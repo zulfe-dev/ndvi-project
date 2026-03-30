@@ -6,3 +6,4 @@ requests==2.32.5
 earthengine-api>=0.1.390
 setuptools
 wheel
+gunicorn
