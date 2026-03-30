@@ -10,6 +10,7 @@ from functools import lru_cache
 from threading import Lock
 
 import ee
+from fastapi.concurrency import run_in_threadpool
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from geopy.exc import GeocoderServiceError, GeocoderTimedOut, GeocoderUnavailable
@@ -742,7 +743,7 @@ async def get_ndvi_tile_url(request: Request) -> JSONResponse:
     try:
         try:
             if not getattr(ee.data, "_initialized", False):
-                _require_ee_ready()
+                await run_in_threadpool(_require_ee_ready)
         except HTTPException:
             detail = "EE not initialized"
             return JSONResponse(
@@ -765,10 +766,21 @@ async def get_ndvi_tile_url(request: Request) -> JSONResponse:
                 },
             )
 
-        tile_payload = ndvi_tile_service.tile_payload(payload.state, payload.date)
-        tile_url = tile_payload.get("tile_url")
+        tile_url = await run_in_threadpool(
+            ndvi_tile_service.tile_url_for_map,
+            payload.state,
+            payload.date,
+        )
         if not tile_url:
-            raise ValueError("Tile URL not generated")
+            detail = "No tile generated"
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "success": False,
+                    "error": detail,
+                    "message": detail,
+                },
+            )
 
         return JSONResponse(
             content={

@@ -449,6 +449,8 @@ class NdviTileService:
         self.boundary_repository = boundary_repository
         self._ee_ready = False
         self._ee_lock = Lock()
+        self._tile_url_cache: dict[str, str] = {}
+        self._tile_url_cache_lock = Lock()
 
     def initialize(self) -> bool:
         if self._ee_ready:
@@ -480,6 +482,49 @@ class NdviTileService:
         start_date = (target_date - timedelta(days=30)).strftime("%Y-%m-%d")
         end_date = (target_date + timedelta(days=1)).strftime("%Y-%m-%d")
         return start_date, end_date
+
+    @staticmethod
+    def _tile_cache_key(state_slug: str, date_value: str) -> str:
+        return f"{_canonical_state_key(state_slug)}|{date_value}"
+
+    def tile_url_for_map(self, state_slug: str, date_value: str) -> str:
+        self._require_ee()
+        cache_key = self._tile_cache_key(state_slug, date_value)
+
+        with self._tile_url_cache_lock:
+            cached_tile_url = self._tile_url_cache.get(cache_key)
+        if cached_tile_url:
+            return cached_tile_url
+
+        state_name = self.boundary_repository.state_name(state_slug)
+        state_geometry = self.boundary_repository.state_geometry(state_slug)
+        start_date, end_date = self._date_window(date_value)
+
+        ee_geometry = ee.Geometry(_round_nested(state_geometry.__geo_interface__, precision=6))
+        collection = (
+            ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
+            .filterBounds(ee_geometry)
+            .filterDate(start_date, end_date)
+            .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", 20))
+        )
+
+        image_count = collection.limit(1).size().getInfo()
+        if image_count == 0:
+            raise BoundaryLookupError(
+                f"No Sentinel-2 imagery found for {state_name} around {date_value}."
+            )
+
+        ndvi_image = (
+            collection.median()
+            .normalizedDifference(["B8", "B4"])
+            .rename("NDVI")
+            .clip(ee_geometry)
+        )
+        tile_url = ndvi_image.getMapId(NDVI_VIS_PARAMS)["tile_fetcher"].url_format
+
+        with self._tile_url_cache_lock:
+            self._tile_url_cache.setdefault(cache_key, tile_url)
+            return self._tile_url_cache[cache_key]
 
     @lru_cache(maxsize=256)
     def tile_payload(self, state_slug: str, date_value: str) -> dict:
